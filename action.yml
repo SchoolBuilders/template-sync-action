@@ -1,0 +1,35 @@
+name: 'Github Classrooms Template repo-sync'
+description: 'Sync a template repository per branch on a github repository'
+inputs:
+  repository-owner:
+    description: 'Owner of the main repository'
+    required: true
+  gh-token:
+    description: 'A classic Github Token with write permissions in your organization'
+    required: true
+outputs:
+  template-url:
+    description: 'Github URL to the synced-template repository'
+    value: ${{ steps.template-sync.outputs.template-url }}
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v3
+    - name: Sync Template
+      id: template-sync
+      if: ${{ github.event_name == 'push' && github.repository_owner == inputs.repository-owner }}
+      env:
+        REPO_OWNER: ${{ github.repository_owner }}
+        FULL_REPO_NAME: ${{ github.repository_owner }}/${{ github.ref_name }}-${{ github.event.repository.name }}
+        GH_TOKEN: ${{ inputs.gh-token }}
+      run: |
+        git config user.email "${{ github.event.pusher.email }}"
+        git config user.name "${{ github.event.pusher.name }}"
+        git rm --cached -r .githooks .github/**/classroom*
+        git commit -C HEAD --amend --allow-empty
+        gh repo view $FULL_REPO_NAME || gh repo create $FULL_REPO_NAME --private --source=. --remote=upstream
+        gh repo edit $FULL_REPO_NAME --template=true
+        git -c "http.https://github.com/.extraheader=" push -f https://$REPO_OWNER:$GH_TOKEN@github.com/$FULL_REPO_NAME.git $GITHUB_REF_NAME:main
+        echo "template-url=https://github.com/$FULL_REPO_NAME"
+      shell: bash
+
